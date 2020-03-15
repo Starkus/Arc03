@@ -2,12 +2,14 @@
 
 cls
 
+set UserPath=%HomeDrive%%HomePath%
+
 set SourceFiles=..\src\Arc03.cpp
-set CompilerFlags=-MDd -nologo -GR- -Od -Oi -EHa- -W4 -wd4530 -FC -Z7 -std:c++17
+set CompilerFlags=-MDd -nologo -GR- -Od -Oi -EHa- -W4 -wd4530 -wd4701 -FC -Z7 -std:c++17
 set LinkerFlags=-opt:ref -incremental:no -NODEFAULTLIB:MSVCRT
 set Libraries=vulkan-1.lib glfw3.lib user32.lib Gdi32.lib winmm.lib shell32.lib
-set IncludePaths=-I C:\VulkanSDK\1.2.131.2\Include -I C:\Users\starkus\source\libraries\glfw-3.3.2\include -I C:\Users\starkus\source\libraries\glm
-set LibPaths=-LIBPATH:C:\VulkanSDK\1.2.131.2\Lib -LIBPATH:C:\Users\starkus\source\libraries\glfw-3.3.2\bin\Release
+set IncludePaths=-I C:\VulkanSDK\1.2.131.2\Include -I %UserPath%\source\libraries\glfw-3.3.2\include -I %UserPath%\source\libraries\glm -I %UserPath%\source\libraries\stb
+set LibPaths=-LIBPATH:C:\VulkanSDK\1.2.131.2\Lib -LIBPATH:%UserPath%\source\libraries\glfw-3.3.2\bin\Release
 
 IF NOT EXIST .\build mkdir .\build
 pushd .\build
