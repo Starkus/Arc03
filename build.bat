@@ -4,12 +4,13 @@ cls
 
 set UserPath=%HomeDrive%%HomePath%
 set LibPath=%UserPath%\source\libraries
+set SrcPath=..\src
 
-set SourceFiles=..\src\Arc03.cpp
+set SourceFiles=%SrcPath%\Arc03.cpp %SrcPath%\VulkanEngine.cpp
 set CompilerFlags=-MDd -nologo -GR- -Oi -EHa- -W4 -wd4530 -wd4701 -FC -Z7 -std:c++17
 set LinkerFlags=-opt:ref -incremental:no -NODEFAULTLIB:MSVCRT
 set Libraries=vulkan-1.lib glfw3.lib user32.lib Gdi32.lib winmm.lib shell32.lib
-set IncludePaths=-I C:\VulkanSDK\1.2.131.2\Include -I %LibPath%\glfw-3.3.2\include -I %LibPath%\glm -I %LibPath%\stb -I %LibPath%\tinyobjloader
+set IncludePaths=-I %SrcPath% -I C:\VulkanSDK\1.2.131.2\Include -I %LibPath%\glfw-3.3.2\include -I %LibPath%\glm -I %LibPath%\stb -I %LibPath%\tinyobjloader
 set LibPaths=-LIBPATH:C:\VulkanSDK\1.2.131.2\Lib -LIBPATH:%LibPath%\glfw-3.3.2\bin\Release
 
 REM - DEBUG
