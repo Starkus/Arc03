@@ -3,11 +3,18 @@
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#pragma warning(push, 1) // Dumb glm giving warnings
+#include <glm/gtx/hash.hpp>
+#pragma warning(pop)
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
 
 #include <chrono>
 #include <iostream>
@@ -18,6 +25,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <array>
+#include <unordered_map>
 
 #include "ArcGlobals.h"
 
@@ -26,6 +34,11 @@ struct Vertex
 	glm::vec3 pos;
 	glm::vec3 color;
 	glm::vec2 texCoord;
+
+	bool operator==(const Vertex &other) const
+	{
+		return pos == other.pos && color == other.color && texCoord == other.texCoord;
+	}
 
 	static VkVertexInputBindingDescription GetBindingDescription()
 	{
@@ -60,6 +73,21 @@ struct Vertex
 	}
 };
 
+// Vertex hash function
+namespace std
+{
+	template<> struct hash<Vertex>
+	{
+		size_t operator()(Vertex const &vertex) const
+		{
+			return ((hash<glm::vec3>()(vertex.pos) ^
+					(hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+					(hash<glm::vec2>()(vertex.texCoord) << 1);
+		}
+	};
+}
+
+
 struct UniformBufferObject
 {
 	alignas(16) glm::mat4 model;
@@ -67,29 +95,13 @@ struct UniformBufferObject
 	alignas(16) glm::mat4 proj;
 };
 
-const std::vector<Vertex> sVertices =
-{
-	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-
-	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
-};
-
-const std::vector<u16> sIndices =
-{
-	0, 1, 2, 2, 3, 0,
-	4, 5, 6, 6, 7, 4
-};
-
 class Arc03
 {
 	const u32 SCREEN_WIDTH = 800;
 	const u32 SCREEN_HEIGHT = 600;
+
+	const std::string MODEL_PATH = "models/chalet.obj";
+	const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 	const std::vector<const char *> mValidationLayers = {
 		"VK_LAYER_KHRONOS_validation"
@@ -173,6 +185,7 @@ private:
 		CreateTextureImage();
 		CreateTextureImageView();
 		CreateTextureSampler();
+		LoadModel();
 		CreateVertexBuffer();
 		CreateIndexBuffer();
 		CreateUniformBuffers();
@@ -880,7 +893,7 @@ private:
 	void CreateTextureImage()
 	{
 		int texWidth, texHeight, texChannels;
-		stbi_uc *pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		stbi_uc *pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 		const VkDeviceSize imageSize = texWidth * texHeight * 4;
 		ARC_ASSERT(pixels);
 
@@ -1033,9 +1046,52 @@ private:
 		VK_ASSERT(vkCreateSampler(mDevice, &samplerInfo, nullptr, &mTextureSampler));
 	}
 
+	void LoadModel()
+	{
+		tinyobj::attrib_t attrib;
+		std::vector<tinyobj::shape_t> shapes;
+		std::vector<tinyobj::material_t> materials;
+		std::string warn, err;
+
+		ARC_ASSERT(tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()));
+
+		std::unordered_map<Vertex, u32> uniqueVertices = {};
+
+		for (const auto &shape : shapes)
+		{
+			for (const auto &index : shape.mesh.indices)
+			{
+				Vertex vertex = {};
+
+				vertex.pos =
+				{
+					attrib.vertices[3 * index.vertex_index + 0],
+					attrib.vertices[3 * index.vertex_index + 1],
+					attrib.vertices[3 * index.vertex_index + 2]
+				};
+
+				vertex.texCoord =
+				{
+					attrib.texcoords[2 * index.texcoord_index + 0],
+					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+				};
+
+				vertex.color = { 1.0f, 1.0f, 1.0f };
+
+				if (uniqueVertices.count(vertex) == 0)
+				{
+					uniqueVertices[vertex] = static_cast<u32>(mVertices.size());
+					mVertices.push_back(vertex);
+				}
+
+				mIndices.push_back(uniqueVertices[vertex]);
+			}
+		}
+	}
+
 	void CreateVertexBuffer()
 	{
-		const VkDeviceSize bufferSize = sizeof(sVertices[0]) * sVertices.size();
+		const VkDeviceSize bufferSize = sizeof(mVertices[0]) * mVertices.size();
 
 		// Create a local buffer
 		const VkMemoryPropertyFlags stagingBufferProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -1046,7 +1102,7 @@ private:
 		// Copy vertex data into local buffer
 		void *data;
 		vkMapMemory(mDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
-		memcpy(data, sVertices.data(), (size_t)bufferSize);
+		memcpy(data, mVertices.data(), (size_t)bufferSize);
 		vkUnmapMemory(mDevice, stagingBufferMemory);
 
 		// Allocate device buffer
@@ -1063,7 +1119,7 @@ private:
 
 	void CreateIndexBuffer()
 	{
-		const VkDeviceSize bufferSize = sizeof(sIndices[0]) * sIndices.size();
+		const VkDeviceSize bufferSize = sizeof(mIndices[0]) * mIndices.size();
 
 		// Create a local buffer
 		const VkMemoryPropertyFlags stagingBufferProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -1074,7 +1130,7 @@ private:
 		// Copy index data into local buffer
 		void *data;
 		vkMapMemory(mDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
-		memcpy(data, sIndices.data(), (size_t)bufferSize);
+		memcpy(data, mIndices.data(), (size_t)bufferSize);
 		vkUnmapMemory(mDevice, stagingBufferMemory);
 
 		// Allocate device buffer
@@ -1304,11 +1360,11 @@ private:
 			VkDeviceSize offsets[] = { 0 };
 			vkCmdBindVertexBuffers(mCommandBuffers[i], 0, 1, vertexBuffers, offsets);
 
-			vkCmdBindIndexBuffer(mCommandBuffers[i], mIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+			vkCmdBindIndexBuffer(mCommandBuffers[i], mIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 			vkCmdBindDescriptorSets(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1, &mDescriptorSets[i], 0, nullptr);
 
-			vkCmdDrawIndexed(mCommandBuffers[i], static_cast<u32>(sIndices.size()), 1, 0, 0, 0);
+			vkCmdDrawIndexed(mCommandBuffers[i], static_cast<u32>(mIndices.size()), 1, 0, 0, 0);
 			vkCmdEndRenderPass(mCommandBuffers[i]);
 			// END COMMANDS
 
@@ -1563,6 +1619,8 @@ private:
 	VkDeviceMemory mVertexBufferMemory;
 	VkBuffer mIndexBuffer;
 	VkDeviceMemory mIndexBufferMemory;
+	std::vector<Vertex> mVertices;
+	std::vector<u32> mIndices;
 
 	std::vector<VkBuffer> mUniformBuffers;
 	std::vector<VkDeviceMemory> mUniformBuffersMemory;
