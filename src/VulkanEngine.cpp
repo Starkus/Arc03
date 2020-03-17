@@ -15,6 +15,7 @@
 #include <unordered_map>
 
 #include "ArcGlobals.h"
+#include "Memory.h"
 
 void VulkanEngine::InitVulkan(GLFWwindow *window, VkSurfaceKHR surface)
 {
@@ -31,6 +32,8 @@ void VulkanEngine::InitVulkan(GLFWwindow *window, VkSurfaceKHR surface)
 	CreateDescriptorSetLayout();
 	CreateGraphicsPipeline();
 	CreateCommandPool();
+	CreateVertexBuffer();
+	CreateIndexBuffer();
 	CreateDepthResources();
 	CreateFramebuffers();
 	CreateTextureSampler();
@@ -113,11 +116,10 @@ void VulkanEngine::DrawFrame()
 
 void VulkanEngine::LoadModel(const std::vector<Vertex> &vertices, const std::vector<u32> &indices)
 {
-	mVertices = vertices;
-	mIndices = indices;
+	mIndexCount = indices.size();
 
-	CreateVertexBuffer();
-	CreateIndexBuffer();
+	FillVertexBuffer((void *)vertices.data(), vertices.size() * sizeof(Vertex));
+	FillIndexBuffer((void *)indices.data(), indices.size() * sizeof(u32));
 
 	CreateCommandBuffers();
 }
@@ -1013,7 +1015,17 @@ void VulkanEngine::CreateTextureSampler()
 
 void VulkanEngine::CreateVertexBuffer()
 {
-	const VkDeviceSize bufferSize = sizeof(mVertices[0]) * mVertices.size();
+	const VkDeviceSize bufferSize = VERTEX_BUFFER_SIZE;
+
+	// Allocate device buffer
+	const VkMemoryPropertyFlags vertexBufferProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			vertexBufferProperties, mVertexBuffer, mVertexBufferMemory);
+}
+
+void VulkanEngine::FillVertexBuffer(void *dataSrc, size_t dataSize)
+{
+	const VkDeviceSize bufferSize = static_cast<VkDeviceSize>(dataSize);
 
 	// Create a local buffer
 	const VkMemoryPropertyFlags stagingBufferProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -1021,16 +1033,11 @@ void VulkanEngine::CreateVertexBuffer()
 	VkDeviceMemory stagingBufferMemory;
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBufferProperties, stagingBuffer, stagingBufferMemory);
 
-	// Copy vertex data into local buffer
-	void *data;
-	vkMapMemory(mDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, mVertices.data(), (size_t)bufferSize);
+	// Copy data into local buffer
+	void *dataDst;
+	vkMapMemory(mDevice, stagingBufferMemory, 0, bufferSize, 0, &dataDst);
+	memcpy(dataDst, dataSrc, dataSize);
 	vkUnmapMemory(mDevice, stagingBufferMemory);
-
-	// Allocate device buffer
-	const VkMemoryPropertyFlags vertexBufferProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			vertexBufferProperties, mVertexBuffer, mVertexBufferMemory);
 
 	// Copy over
 	CopyBuffer(stagingBuffer, mVertexBuffer, bufferSize);
@@ -1042,7 +1049,16 @@ void VulkanEngine::CreateVertexBuffer()
 
 void VulkanEngine::CreateIndexBuffer()
 {
-	const VkDeviceSize bufferSize = sizeof(mIndices[0]) * mIndices.size();
+	const VkDeviceSize bufferSize = INDEX_BUFFER_SIZE;
+
+	// Allocate device buffer
+	const VkMemoryPropertyFlags indexBufferProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBufferProperties, mIndexBuffer, mIndexBufferMemory);
+}
+
+void VulkanEngine::FillIndexBuffer(void *dataSrc, size_t dataSize)
+{
+	const VkDeviceSize bufferSize = static_cast<VkDeviceSize>(dataSize);
 
 	// Create a local buffer
 	const VkMemoryPropertyFlags stagingBufferProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -1050,15 +1066,11 @@ void VulkanEngine::CreateIndexBuffer()
 	VkDeviceMemory stagingBufferMemory;
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBufferProperties, stagingBuffer, stagingBufferMemory);
 
-	// Copy index data into local buffer
-	void *data;
-	vkMapMemory(mDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, mIndices.data(), (size_t)bufferSize);
+	// Copy data into local buffer
+	void *dataDst;
+	vkMapMemory(mDevice, stagingBufferMemory, 0, bufferSize, 0, &dataDst);
+	memcpy(dataDst, dataSrc, dataSize);
 	vkUnmapMemory(mDevice, stagingBufferMemory);
-
-	// Allocate device buffer
-	const VkMemoryPropertyFlags indexBufferProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBufferProperties, mIndexBuffer, mIndexBufferMemory);
 
 	// Copy over
 	CopyBuffer(stagingBuffer, mIndexBuffer, bufferSize);
@@ -1292,7 +1304,7 @@ void VulkanEngine::CreateCommandBuffers()
 
 		vkCmdBindDescriptorSets(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1, &mDescriptorSets[i], 0, nullptr);
 
-		vkCmdDrawIndexed(mCommandBuffers[i], static_cast<u32>(mIndices.size()), 1, 0, 0, 0);
+		vkCmdDrawIndexed(mCommandBuffers[i], static_cast<u32>(mIndexCount), 1, 0, 0, 0);
 		vkCmdEndRenderPass(mCommandBuffers[i]);
 		// END COMMANDS
 

@@ -119,7 +119,9 @@ private:
 	void CreateTextureImageView();
 	void CreateTextureSampler();
 	void CreateVertexBuffer();
+	void FillVertexBuffer(void *dataSrc, size_t dataSize);
 	void CreateIndexBuffer();
+	void FillIndexBuffer(void *dataSrc, size_t dataSize);
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 	void CopyBufferToImage(VkBuffer buffer, VkImage image, u32 width, u32 height);
@@ -172,8 +174,7 @@ private:
 	VkDeviceMemory mVertexBufferMemory;
 	VkBuffer mIndexBuffer;
 	VkDeviceMemory mIndexBufferMemory;
-	std::vector<Vertex> mVertices;
-	std::vector<u32> mIndices;
+	size_t mIndexCount;
 
 	std::vector<VkBuffer> mUniformBuffers;
 	std::vector<VkDeviceMemory> mUniformBuffersMemory;
