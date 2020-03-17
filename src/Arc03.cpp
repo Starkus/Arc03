@@ -13,9 +13,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
-
 #include <chrono>
 #include <iostream>
 #include <fstream>
@@ -43,7 +40,7 @@ class Arc03
 	const u32 SCREEN_WIDTH = 800;
 	const u32 SCREEN_HEIGHT = 600;
 
-	const std::string MODEL_PATH = "models/chalet.obj";
+	const std::string MODEL_PATH = "models/chalet.bin";
 	const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 public:
@@ -90,47 +87,28 @@ private:
 
 	void LoadModel()
 	{
-		tinyobj::attrib_t attrib;
-		std::vector<tinyobj::shape_t> shapes;
-		std::vector<tinyobj::material_t> materials;
-		std::string warn, err;
-
-		ARC_ASSERT(tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()));
-
 		std::vector<Vertex> vertices;
 		std::vector<u32> indices;
-		std::unordered_map<Vertex, u32> uniqueVertices = {};
 
-		for (const auto &shape : shapes)
-		{
-			for (const auto &index : shape.mesh.indices)
-			{
-				Vertex vertex = {};
+		std::ifstream file;
+		file.open(MODEL_PATH.c_str(), std::ios::binary);
 
-				vertex.pos =
-				{
-					attrib.vertices[3 * index.vertex_index + 0],
-					attrib.vertices[3 * index.vertex_index + 1],
-					attrib.vertices[3 * index.vertex_index + 2]
-				};
+		char header[9];
+		file.read(header, 8);
+		header[8] = 0;
 
-				vertex.texCoord =
-				{
-					attrib.texcoords[2 * index.texcoord_index + 0],
-					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-				};
+		u32 vertCount, indexCount;
+		file.read(reinterpret_cast<char *>(&vertCount), sizeof(u32));
+		file.read(reinterpret_cast<char *>(&indexCount), sizeof(u32));
 
-				vertex.color = { 1.0f, 1.0f, 1.0f };
+		vertices.resize(vertCount);
+		indices.resize(indexCount);
 
-				if (uniqueVertices.count(vertex) == 0)
-				{
-					uniqueVertices[vertex] = static_cast<u32>(vertices.size());
-					vertices.push_back(vertex);
-				}
+		file.read(reinterpret_cast<char *>(vertices.data()), sizeof(Vertex) * vertCount);
+		file.read(reinterpret_cast<char *>(indices.data()), sizeof(u32) * indexCount);
 
-				indices.push_back(uniqueVertices[vertex]);
-			}
-		}
+		file.close();
+
 		mVulkanEngine.LoadModel(vertices, indices);
 	}
 

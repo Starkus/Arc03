@@ -22,6 +22,7 @@ struct Vertex
 		return pos == other.pos && color == other.color && texCoord == other.texCoord;
 	}
 
+#ifndef ARC_TOOLS
 	static VkVertexInputBindingDescription GetBindingDescription()
 	{
 		VkVertexInputBindingDescription bindingDescription = {};
@@ -53,6 +54,7 @@ struct Vertex
 
 		return attributeDescriptions;
 	}
+#endif
 };
 
 // Vertex hash function
