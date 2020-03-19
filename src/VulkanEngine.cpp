@@ -14,8 +14,8 @@
 #include <array>
 #include <unordered_map>
 
-#include "ArcGlobals.h"
 #include "Memory.h"
+#include "ComponentManager.h"
 
 void VulkanEngine::InitVulkan(GLFWwindow *window, VkSurfaceKHR surface)
 {
@@ -36,6 +36,7 @@ void VulkanEngine::InitVulkan(GLFWwindow *window, VkSurfaceKHR surface)
 	CreateIndexBuffer();
 	CreateDepthResources();
 	CreateFramebuffers();
+	CreateCommandBuffers();
 	CreateTextureSampler();
 	CreateUniformBuffers();
 	CreateDescriptorPool();
@@ -66,6 +67,7 @@ void VulkanEngine::DrawFrame()
 	mImagesInFlight[imageIndex] = mInFlightFences[mCurrentFrame];
 
 	UpdateUniformBuffer(imageIndex);
+	UpdateCommandBuffer(imageIndex);
 
 	// Build all the required Vulkan structs...
 	VkSubmitInfo submitInfo = {};
@@ -118,10 +120,8 @@ void VulkanEngine::LoadModel(const std::vector<Vertex> &vertices, const std::vec
 {
 	mIndexCount = indices.size();
 
-	FillVertexBuffer((void *)vertices.data(), vertices.size() * sizeof(Vertex));
-	FillIndexBuffer((void *)indices.data(), indices.size() * sizeof(u32));
-
-	CreateCommandBuffers();
+	FillVertexBuffer((void *)vertices.data(), 0, vertices.size() * sizeof(Vertex));
+	FillIndexBuffer((void *)indices.data(), 0, indices.size() * sizeof(u32));
 }
 
 void VulkanEngine::WaitForDevice()
@@ -787,7 +787,7 @@ void VulkanEngine::CreateCommandPool()
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-	poolInfo.flags = 0;
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	VK_ASSERT(vkCreateCommandPool(mDevice, &poolInfo, nullptr, &mCommandPool));
 }
@@ -823,6 +823,8 @@ void VulkanEngine::CreateDepthResources()
 			mDepthImageMemory);
 
 	mDepthImageView = CreateImageView(mDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	TransitionImageLayout(mDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
 VkFormat VulkanEngine::FindSupportedFormat(const std::vector<VkFormat> &candidates, VkImageTiling tiling,
@@ -852,7 +854,7 @@ VkFormat VulkanEngine::FindDepthFormat()
 
 bool VulkanEngine::HasStencilComponent(VkFormat format)
 {
-	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || VK_FORMAT_D24_UNORM_S8_UINT;
+	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
 void VulkanEngine::LoadTextureFromImage(void *pixels, u32 width, u32 height)
@@ -1023,7 +1025,7 @@ void VulkanEngine::CreateVertexBuffer()
 			vertexBufferProperties, mVertexBuffer, mVertexBufferMemory);
 }
 
-void VulkanEngine::FillVertexBuffer(void *dataSrc, size_t dataSize)
+void VulkanEngine::FillVertexBuffer(void *dataSrc, size_t offset, size_t dataSize)
 {
 	const VkDeviceSize bufferSize = static_cast<VkDeviceSize>(dataSize);
 
@@ -1040,7 +1042,7 @@ void VulkanEngine::FillVertexBuffer(void *dataSrc, size_t dataSize)
 	vkUnmapMemory(mDevice, stagingBufferMemory);
 
 	// Copy over
-	CopyBuffer(stagingBuffer, mVertexBuffer, bufferSize);
+	CopyBuffer(stagingBuffer, mVertexBuffer, static_cast<VkDeviceSize>(offset), bufferSize);
 
 	// Free local buffer
 	vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
@@ -1056,7 +1058,7 @@ void VulkanEngine::CreateIndexBuffer()
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indexBufferProperties, mIndexBuffer, mIndexBufferMemory);
 }
 
-void VulkanEngine::FillIndexBuffer(void *dataSrc, size_t dataSize)
+void VulkanEngine::FillIndexBuffer(void *dataSrc, size_t offset, size_t dataSize)
 {
 	const VkDeviceSize bufferSize = static_cast<VkDeviceSize>(dataSize);
 
@@ -1073,19 +1075,20 @@ void VulkanEngine::FillIndexBuffer(void *dataSrc, size_t dataSize)
 	vkUnmapMemory(mDevice, stagingBufferMemory);
 
 	// Copy over
-	CopyBuffer(stagingBuffer, mIndexBuffer, bufferSize);
+	CopyBuffer(stagingBuffer, mIndexBuffer, static_cast<VkDeviceSize>(offset), bufferSize);
 
 	// Free local buffer
 	vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
 	vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
 }
 
-void VulkanEngine::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+void VulkanEngine::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize size)
 {
 	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
 	VkBufferCopy copyRegion = {};
 	copyRegion.size = size;
+	copyRegion.dstOffset = offset;
 	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
 	EndSingleTimeCommands(commandBuffer);
@@ -1102,11 +1105,21 @@ void VulkanEngine::TransitionImageLayout(VkImage image, VkFormat format, VkImage
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.image = image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	barrier.subresourceRange.baseMipLevel = 0;
 	barrier.subresourceRange.levelCount = 1;
 	barrier.subresourceRange.baseArrayLayer = 0;
 	barrier.subresourceRange.layerCount = 1;
+
+	if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+	{
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		if (HasStencilComponent(format))
+			barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+	}
+	else
+	{
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	}
 
 	VkPipelineStageFlags srcStage;
 	VkPipelineStageFlags dstStage;
@@ -1126,6 +1139,15 @@ void VulkanEngine::TransitionImageLayout(VkImage image, VkFormat format, VkImage
 
 		srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 		dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+	{
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+		srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		dstStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 	}
 	else
 	{
@@ -1268,48 +1290,63 @@ void VulkanEngine::CreateCommandBuffers()
 	allocInfo.commandBufferCount = static_cast<u32>(mCommandBuffers.size());
 
 	VK_ASSERT(vkAllocateCommandBuffers(mDevice, &allocInfo, mCommandBuffers.data()));
+}
 
-	for (size_t i = 0; i < mCommandBuffers.size(); ++i)
+void VulkanEngine::UpdateCommandBuffer(u32 frame)
+{
+	VkCommandBufferBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = 0;
+	beginInfo.pInheritanceInfo = nullptr;
+	VK_ASSERT(vkBeginCommandBuffer(mCommandBuffers[frame], &beginInfo));
+
+	// COMMANDS
+	VkRenderPassBeginInfo renderPassInfo = {};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassInfo.renderPass = mRenderPass;
+	renderPassInfo.framebuffer = mSwapChainFramebuffers[frame];
+	renderPassInfo.renderArea.offset = { 0, 0 };
+	renderPassInfo.renderArea.extent = mSwapChainExtent;
+
+	std::array<VkClearValue, 2> clearValues = {};
+	clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	renderPassInfo.clearValueCount = static_cast<u32>(clearValues.size());
+	renderPassInfo.pClearValues = clearValues.data();
+
+	vkCmdBeginRenderPass(mCommandBuffers[frame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(mCommandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
+
+	VkBuffer vertexBuffers[] = { mVertexBuffer };
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(mCommandBuffers[frame], 0, 1, vertexBuffers, offsets);
+
+	vkCmdBindIndexBuffer(mCommandBuffers[frame], mIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdBindDescriptorSets(mCommandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS,
+			mPipelineLayout, 0, 1, &mDescriptorSets[frame], 0, nullptr);
+
+	//vkCmdDrawIndexed(mCommandBuffers[frame], indexCount, 1, 0, 0, 0);
+	u32 firstVertex = 0;
+	u32 firstIndex = 0;
+	for (auto it = mComponentManager->GraphicComponentsBegin(); it != mComponentManager->GraphicComponentsEnd(); ++it)
 	{
-		VkCommandBufferBeginInfo beginInfo = {};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = 0;
-		beginInfo.pInheritanceInfo = nullptr;
+		/*{
+			const GraphicResource &res = it->mGraphicResource;
+			firstIndex += res.mIndexCount;
+			++it;
+		}*/
+		const GraphicResource &res = it->mGraphicResource;
 
-		VK_ASSERT(vkBeginCommandBuffer(mCommandBuffers[i], &beginInfo));
-
-		// COMMANDS
-		VkRenderPassBeginInfo renderPassInfo = {};
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = mRenderPass;
-		renderPassInfo.framebuffer = mSwapChainFramebuffers[i];
-		renderPassInfo.renderArea.offset = { 0, 0 };
-		renderPassInfo.renderArea.extent = mSwapChainExtent;
-
-		std::array<VkClearValue, 2> clearValues = {};
-		clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
-		clearValues[1].depthStencil = { 1.0f, 0 };
-
-		renderPassInfo.clearValueCount = static_cast<u32>(clearValues.size());
-		renderPassInfo.pClearValues = clearValues.data();
-
-		vkCmdBeginRenderPass(mCommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
-
-		VkBuffer vertexBuffers[] = { mVertexBuffer };
-		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(mCommandBuffers[i], 0, 1, vertexBuffers, offsets);
-
-		vkCmdBindIndexBuffer(mCommandBuffers[i], mIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-		vkCmdBindDescriptorSets(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1, &mDescriptorSets[i], 0, nullptr);
-
-		vkCmdDrawIndexed(mCommandBuffers[i], static_cast<u32>(mIndexCount), 1, 0, 0, 0);
-		vkCmdEndRenderPass(mCommandBuffers[i]);
-		// END COMMANDS
-
-		VK_ASSERT(vkEndCommandBuffer(mCommandBuffers[i]));
+		vkCmdDrawIndexed(mCommandBuffers[frame], res.mIndexCount, 1, firstIndex, firstVertex, 0);
+		firstVertex += res.mVertexCount;
+		firstIndex += res.mIndexCount;
 	}
+	vkCmdEndRenderPass(mCommandBuffers[frame]);
+	// END COMMANDS
+
+	VK_ASSERT(vkEndCommandBuffer(mCommandBuffers[frame]));
 }
 
 void VulkanEngine::CreateSyncObjects()
@@ -1342,12 +1379,13 @@ void VulkanEngine::UpdateUniformBuffer(u32 currentImage)
 	const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 	UniformBufferObject ubo = {};
-	ubo.model =  glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.proj = glm::perspective(glm::radians(45.0f), mSwapChainExtent.width / (float) mSwapChainExtent.height, 0.1f, 10.0f);
+	ubo.model[0] = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.model[1] = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.view[0] = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.proj[0] = glm::perspective(glm::radians(45.0f), mSwapChainExtent.width / (float) mSwapChainExtent.height, 0.1f, 10.0f);
 
 	// Vulkan correction, flip upside down
-	ubo.proj[1][1] *= -1;
+	ubo.proj[0][1][1] *= -1;
 
 	void *data;
 	vkMapMemory(mDevice, mUniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);

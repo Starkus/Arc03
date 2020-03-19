@@ -22,14 +22,15 @@
 #include "ArcGlobals.h"
 #include "Geometry.h"
 
+class ComponentManager;
+
 class VulkanEngine
 {
 	struct UniformBufferObject
-
 	{
-		alignas(16) glm::mat4 model;
-		alignas(16) glm::mat4 view;
-		alignas(16) glm::mat4 proj;
+		alignas(16) glm::mat4 model[16];
+		alignas(16) glm::mat4 view[16];
+		alignas(16) glm::mat4 proj[16];
 	};
 
 	const std::vector<const char *> mValidationLayers = {
@@ -67,12 +68,19 @@ class VulkanEngine
 #endif
 
 public:
+	VulkanEngine(ComponentManager *componentManager) : mComponentManager(componentManager) {}
+
 	void InitVulkan(GLFWwindow *window, VkSurfaceKHR surface);
 	void DrawFrame();
 	void LoadTextureFromImage(void *pixels, u32 width, u32 height);
 	void LoadModel(const std::vector<Vertex> &vertices, const std::vector<u32> &indices);
 	void CleanUp();
 	void WaitForDevice();
+
+	// public for now
+	void FillVertexBuffer(void *dataSrc, size_t offset, size_t dataSize);
+	void FillIndexBuffer(void *dataSrc, size_t offset, size_t dataSize);
+	void UpdateCommandBuffer(u32 frame);
 
 	static void FramebufferResizeCallback(GLFWwindow *window, int width, int height)
 	{
@@ -119,10 +127,8 @@ private:
 	void CreateTextureImageView();
 	void CreateTextureSampler();
 	void CreateVertexBuffer();
-	void FillVertexBuffer(void *dataSrc, size_t dataSize);
 	void CreateIndexBuffer();
-	void FillIndexBuffer(void *dataSrc, size_t dataSize);
-	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize size);
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 	void CopyBufferToImage(VkBuffer buffer, VkImage image, u32 width, u32 height);
 	u32 FindMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties);
@@ -150,6 +156,8 @@ private:
 		file.close();
 		return buffer;
 	}
+
+	ComponentManager *const mComponentManager;
 
 	VkInstance mInstance;
 	VkPhysicalDevice mPhysicalDevice;

@@ -1,2 +1,5 @@
 #include "Arc03.cpp"
 #include "VulkanEngine.cpp"
+#include "ResourceManager.cpp"
+#include "GpuAllocator.cpp"
+#include "ComponentManager.cpp"

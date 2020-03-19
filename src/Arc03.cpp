@@ -27,13 +27,9 @@
 #include "ArcGlobals.h"
 #include "VulkanEngine.h"
 #include "Geometry.h"
-
-struct UniformBufferObject
-{
-	alignas(16) glm::mat4 model;
-	alignas(16) glm::mat4 view;
-	alignas(16) glm::mat4 proj;
-};
+#include "Memory.h"
+#include "ResourceManager.h"
+#include "ComponentManager.h"
 
 class Arc03
 {
@@ -44,13 +40,22 @@ class Arc03
 	const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 public:
+	Arc03() :
+		mVulkanEngine(&mComponentManager),
+		mResourceManager(&mVulkanEngine),
+		mComponentManager(&mResourceManager)
+	{
+	}
+
 	void Run()
 	{
 		InitWindow();
 		InitVulkanEngine();
 
 		LoadTexture();
-		LoadModel();
+
+		mComponentManager.CreateGraphicComponent("models/monkey.bin");
+		mComponentManager.CreateGraphicComponent(MODEL_PATH);
 
 		MainLoop();
 		CleanUp();
@@ -132,6 +137,8 @@ private:
 	}
 
 	VulkanEngine mVulkanEngine;
+	ResourceManager mResourceManager;
+	ComponentManager mComponentManager;
 
 	// Window
 	GLFWwindow *mWindow;
