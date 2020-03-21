@@ -138,7 +138,9 @@ void VulkanEngine::CleanUp()
 	vkDestroyImage(mDevice, mTextureImage, nullptr);
 	vkFreeMemory(mDevice, mTextureImageMemory, nullptr);
 
-	vkDestroyDescriptorSetLayout(mDevice, mDescriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(mDevice, mSceneDescriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(mDevice, mFrameDescriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(mDevice, mDrawDescriptorSetLayout, nullptr);
 
 	vkDestroyBuffer(mDevice, mVertexBuffer, nullptr);
 	vkFreeMemory(mDevice, mVertexBufferMemory, nullptr);
@@ -580,6 +582,21 @@ void VulkanEngine::CreateDescriptorSetLayout()
 	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	uboLayoutBinding.pImmutableSamplers = nullptr;
 
+	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings = &uboLayoutBinding;
+
+	VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &mSceneDescriptorSetLayout));
+	VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &mFrameDescriptorSetLayout));
+
+	VkDescriptorSetLayoutBinding dynamicUboLayoutBinding = {};
+	dynamicUboLayoutBinding.binding = 0;
+	dynamicUboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+	dynamicUboLayoutBinding.descriptorCount = 1;
+	dynamicUboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	dynamicUboLayoutBinding.pImmutableSamplers = nullptr;
+
 	VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
 	samplerLayoutBinding.binding = 1;
 	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -587,18 +604,13 @@ void VulkanEngine::CreateDescriptorSetLayout()
 	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	samplerLayoutBinding.pImmutableSamplers = nullptr;
 
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
-	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<u32>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { dynamicUboLayoutBinding, samplerLayoutBinding };
+	VkDescriptorSetLayoutCreateInfo dynamicLayoutInfo = {};
+	dynamicLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	dynamicLayoutInfo.bindingCount = static_cast<u32>(bindings.size());
+	dynamicLayoutInfo.pBindings = bindings.data();
 
-	VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &mDescriptorSetLayout));
-
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &mDescriptorSetLayout;
+	VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &dynamicLayoutInfo, nullptr, &mDrawDescriptorSetLayout));
 }
 
 void VulkanEngine::CreateGraphicsPipeline()
@@ -701,10 +713,15 @@ void VulkanEngine::CreateGraphicsPipeline()
 	colorBlending.blendConstants[2] = 0.0f;
 	colorBlending.blendConstants[3] = 0.0f;
 
+	const VkDescriptorSetLayout setLayouts[] = {
+		mSceneDescriptorSetLayout,
+		mFrameDescriptorSetLayout,
+		mDrawDescriptorSetLayout
+	};
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &mDescriptorSetLayout;
+	pipelineLayoutInfo.setLayoutCount = DS_COUNT;
+	pipelineLayoutInfo.pSetLayouts = setLayouts;
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -1214,68 +1231,114 @@ void VulkanEngine::CreateUniformBuffers()
 
 void VulkanEngine::CreateDescriptorPool()
 {
-	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
+	std::array<VkDescriptorPoolSize, 3> poolSizes = {};
+	// Static descriptors (global)
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<u32>(mSwapChainImages.size());
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[0].descriptorCount = static_cast<u32>(mSwapChainImages.size() * 2);
+	// Dynamic descriptors (per frame and per draw)
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	poolSizes[1].descriptorCount = static_cast<u32>(mSwapChainImages.size());
+	poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[2].descriptorCount = static_cast<u32>(mSwapChainImages.size());
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<u32>(mSwapChainImages.size());
+	poolInfo.maxSets = static_cast<u32>(mSwapChainImages.size() * 3);
 
 	VK_ASSERT(vkCreateDescriptorPool(mDevice, &poolInfo, nullptr, &mDescriptorPool));
 }
 
 void VulkanEngine::CreateDescriptorSets()
 {
-	std::vector<VkDescriptorSetLayout> layouts(mSwapChainImages.size(), mDescriptorSetLayout);
 	VkDescriptorSetAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = mDescriptorPool;
 	allocInfo.descriptorSetCount = static_cast<u32>(mSwapChainImages.size());
-	allocInfo.pSetLayouts = layouts.data();
 
-	mDescriptorSets.resize(mSwapChainImages.size());
-	VK_ASSERT(vkAllocateDescriptorSets(mDevice, &allocInfo, mDescriptorSets.data()));
+	// Scene descriptor set
+	std::vector<VkDescriptorSetLayout> sceneLayouts(mSwapChainImages.size(), mSceneDescriptorSetLayout);
+	allocInfo.pSetLayouts = sceneLayouts.data();
+	mSceneDescriptorSets.resize(mSwapChainImages.size());
+	VK_ASSERT(vkAllocateDescriptorSets(mDevice, &allocInfo, mSceneDescriptorSets.data()));
 
-	//UpdateDescriptorSets();
+	// Frame descriptor set
+	std::vector<VkDescriptorSetLayout> frameLayouts(mSwapChainImages.size(), mFrameDescriptorSetLayout);
+	allocInfo.pSetLayouts = frameLayouts.data();
+	mFrameDescriptorSets.resize(mSwapChainImages.size());
+	VK_ASSERT(vkAllocateDescriptorSets(mDevice, &allocInfo, mFrameDescriptorSets.data()));
+
+	// Draw descriptor set
+	std::vector<VkDescriptorSetLayout> drawLayouts(mSwapChainImages.size(), mDrawDescriptorSetLayout);
+	allocInfo.pSetLayouts = drawLayouts.data();
+	mDrawDescriptorSets.resize(mSwapChainImages.size());
+	VK_ASSERT(vkAllocateDescriptorSets(mDevice, &allocInfo, mDrawDescriptorSets.data()));
 }
 
 void VulkanEngine::UpdateDescriptorSets()
 {
 	for (size_t i = 0; i < mSwapChainImages.size(); ++i)
 	{
-		VkDescriptorBufferInfo bufferInfo = {};
-		bufferInfo.buffer = mUniformBuffers[i];
-		bufferInfo.offset = 0;
-		bufferInfo.range = sizeof(UniformBufferObject);
+		// Scene descriptor
+		VkDescriptorBufferInfo sceneBufferInfo = {};
+		sceneBufferInfo.buffer = mUniformBuffers[i];
+		sceneBufferInfo.offset = offsetof(UniformBufferObject, scene);
+		sceneBufferInfo.range = sizeof(SceneUniformBuffer);
+
+		std::array<VkWriteDescriptorSet, 4> descriptorWrites = {};
+		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[0].dstSet = mSceneDescriptorSets[i];
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstArrayElement = 0;
+		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pBufferInfo = &sceneBufferInfo;
+
+		// Frame descriptor
+		VkDescriptorBufferInfo frameBufferInfo = {};
+		frameBufferInfo.buffer = mUniformBuffers[i];
+		frameBufferInfo.offset = offsetof(UniformBufferObject, frame);
+		frameBufferInfo.range = sizeof(FrameUniformBuffer);
+
+		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[1].dstSet = mFrameDescriptorSets[i];
+		descriptorWrites[1].dstBinding = 0;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[1].descriptorCount = 1;
+		descriptorWrites[1].pBufferInfo = &frameBufferInfo;
+
+		// Draw descriptor
+		VkDescriptorBufferInfo drawBufferInfo = {};
+		drawBufferInfo.buffer = mUniformBuffers[i];
+		drawBufferInfo.offset = offsetof(UniformBufferObject, draw);
+		drawBufferInfo.range = sizeof(DrawUniformBuffer);
+
+		descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[2].dstSet = mDrawDescriptorSets[i];
+		descriptorWrites[2].dstBinding = 0;
+		descriptorWrites[2].dstArrayElement = 0;
+		descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		descriptorWrites[2].descriptorCount = 1;
+		descriptorWrites[2].pBufferInfo = &drawBufferInfo;
 
 		VkDescriptorImageInfo imageInfo = {};
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		imageInfo.imageView = mTextureImageView;
 		imageInfo.sampler = mTextureSampler;
 
-		std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
-		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[0].dstSet = mDescriptorSets[i];
-		descriptorWrites[0].dstBinding = 0;
-		descriptorWrites[0].dstArrayElement = 0;
-		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrites[0].descriptorCount = 1;
-		descriptorWrites[0].pBufferInfo = &bufferInfo;
+		descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[3].dstSet = mDrawDescriptorSets[i];
+		descriptorWrites[3].dstBinding = 1;
+		descriptorWrites[3].dstArrayElement = 0;
+		descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites[3].descriptorCount = 1;
+		descriptorWrites[3].pImageInfo = &imageInfo;
 
-		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[1].dstSet = mDescriptorSets[i];
-		descriptorWrites[1].dstBinding = 1;
-		descriptorWrites[1].dstArrayElement = 0;
-		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrites[1].descriptorCount = 1;
-		descriptorWrites[1].pImageInfo = &imageInfo;
-
-		vkUpdateDescriptorSets(mDevice, static_cast<u32>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+		// Update
+		vkUpdateDescriptorSets(mDevice, static_cast<u32>(descriptorWrites.size()),
+				descriptorWrites.data(), 0, nullptr);
 	}
 }
 
@@ -1325,23 +1388,26 @@ void VulkanEngine::UpdateCommandBuffer(u32 frame)
 	vkCmdBindIndexBuffer(mCommandBuffers[frame], mIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 	vkCmdBindDescriptorSets(mCommandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS,
-			mPipelineLayout, 0, 1, &mDescriptorSets[frame], 0, nullptr);
+			mPipelineLayout, DS_SCENE, 1, &mSceneDescriptorSets[frame], 0, nullptr);
 
-	//vkCmdDrawIndexed(mCommandBuffers[frame], indexCount, 1, 0, 0, 0);
+	vkCmdBindDescriptorSets(mCommandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS,
+			mPipelineLayout, DS_FRAME, 1, &mFrameDescriptorSets[frame], 0, nullptr);
+
 	u32 firstVertex = 0;
 	u32 firstIndex = 0;
+	u32 matIndex = 0;
 	for (auto it = mComponentManager->GraphicComponentsBegin(); it != mComponentManager->GraphicComponentsEnd(); ++it)
 	{
-		/*{
-			const GraphicResource &res = it->mGraphicResource;
-			firstIndex += res.mIndexCount;
-			++it;
-		}*/
+		u32 offset = sizeof(glm::mat4) * matIndex;
+		vkCmdBindDescriptorSets(mCommandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS,
+			mPipelineLayout, DS_DRAW, 1, &mDrawDescriptorSets[frame], 1, &offset);
+
 		const GraphicResource &res = it->mGraphicResource;
 
 		vkCmdDrawIndexed(mCommandBuffers[frame], res.mIndexCount, 1, firstIndex, firstVertex, 0);
 		firstVertex += res.mVertexCount;
 		firstIndex += res.mIndexCount;
+		++matIndex;
 	}
 	vkCmdEndRenderPass(mCommandBuffers[frame]);
 	// END COMMANDS
@@ -1379,13 +1445,13 @@ void VulkanEngine::UpdateUniformBuffer(u32 currentImage)
 	const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 	UniformBufferObject ubo = {};
-	ubo.model[0] = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.model[1] = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.view[0] = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.proj[0] = glm::perspective(glm::radians(45.0f), mSwapChainExtent.width / (float) mSwapChainExtent.height, 0.1f, 10.0f);
+	ubo.scene.proj = glm::perspective(glm::radians(45.0f), mSwapChainExtent.width / (float) mSwapChainExtent.height, 0.1f, 10.0f);
+	ubo.frame.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.draw[0].model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.draw[1].model = glm::rotate(glm::mat4(1.0f), time * glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
 	// Vulkan correction, flip upside down
-	ubo.proj[0][1][1] *= -1;
+	ubo.scene.proj[1][1] *= -1;
 
 	void *data;
 	vkMapMemory(mDevice, mUniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);

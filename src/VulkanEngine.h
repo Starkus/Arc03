@@ -26,11 +26,34 @@ class ComponentManager;
 
 class VulkanEngine
 {
+	enum eDescriptorSets
+	{
+		DS_SCENE,
+		DS_FRAME,
+		DS_DRAW,
+		DS_COUNT
+	};
+
+	struct SceneUniformBuffer
+	{
+		alignas(16) glm::mat4 proj;
+	};
+
+	struct FrameUniformBuffer
+	{
+		alignas(16) glm::mat4 view;
+	};
+
+	struct DrawUniformBuffer
+	{
+		alignas(16) glm::mat4 model;
+	};
+
 	struct UniformBufferObject
 	{
-		alignas(16) glm::mat4 model[16];
-		alignas(16) glm::mat4 view[16];
-		alignas(16) glm::mat4 proj[16];
+		alignas(16) SceneUniformBuffer scene;
+		alignas(16) FrameUniformBuffer frame;
+		alignas(16) DrawUniformBuffer draw[16];
 	};
 
 	const std::vector<const char *> mValidationLayers = {
@@ -170,7 +193,9 @@ private:
 	VkExtent2D mSwapChainExtent;
 	std::vector<VkFramebuffer> mSwapChainFramebuffers;
 	VkRenderPass mRenderPass;
-	VkDescriptorSetLayout mDescriptorSetLayout;
+	VkDescriptorSetLayout mSceneDescriptorSetLayout;
+	VkDescriptorSetLayout mFrameDescriptorSetLayout;
+	VkDescriptorSetLayout mDrawDescriptorSetLayout;
 	VkPipelineLayout mPipelineLayout;
 	VkPipeline mGraphicsPipeline;
 	VkCommandPool mCommandPool;
@@ -187,7 +212,10 @@ private:
 	std::vector<VkBuffer> mUniformBuffers;
 	std::vector<VkDeviceMemory> mUniformBuffersMemory;
 	VkDescriptorPool mDescriptorPool;
-	std::vector<VkDescriptorSet> mDescriptorSets;
+
+	std::vector<VkDescriptorSet> mSceneDescriptorSets;
+	std::vector<VkDescriptorSet> mFrameDescriptorSets;
+	std::vector<VkDescriptorSet> mDrawDescriptorSets;
 
 	VkImage mTextureImage;
 	VkDeviceMemory mTextureImageMemory;

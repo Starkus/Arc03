@@ -60,6 +60,7 @@ void ExportModel(const std::string &filename, std::vector<Vertex> &vertices, std
 	std::ofstream outputFile;
 	outputFile.open(filename, std::ios::out | std::ios::binary | std::ios::trunc);
 
+	// Header
 	outputFile << "ARCR";
 	outputFile << "MESH";
 	
