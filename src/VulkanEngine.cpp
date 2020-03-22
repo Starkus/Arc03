@@ -29,7 +29,7 @@ void VulkanEngine::InitVulkan(GLFWwindow *window, VkSurfaceKHR surface)
 	CreateSwapChain();
 	CreateSwapChainImageViews();
 	CreateRenderPass();
-	CreateDescriptorSetLayout();
+	CreateDescriptorSetLayouts();
 	CreateGraphicsPipeline();
 	CreateCommandPool();
 	CreateVertexBuffer();
@@ -573,44 +573,51 @@ void VulkanEngine::CreateRenderPass()
 	VK_ASSERT(vkCreateRenderPass(mDevice, &renderPassInfo, nullptr, &mRenderPass));
 }
 
-void VulkanEngine::CreateDescriptorSetLayout()
+void VulkanEngine::CreateDescriptorSetLayouts()
 {
-	VkDescriptorSetLayoutBinding uboLayoutBinding = {};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	uboLayoutBinding.pImmutableSamplers = nullptr;
+	// Scene and Frame
+	{
+		VkDescriptorSetLayoutBinding layoutBinding = {};
+		layoutBinding.binding = 0;
+		layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		layoutBinding.descriptorCount = 1;
+		layoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		layoutBinding.pImmutableSamplers = nullptr;
 
-	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 1;
-	layoutInfo.pBindings = &uboLayoutBinding;
+		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = 1;
+		layoutInfo.pBindings = &layoutBinding;
 
-	VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &mSceneDescriptorSetLayout));
-	VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &mFrameDescriptorSetLayout));
+		// Scene and frame descriptor sets have the same layout
+		VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &mSceneDescriptorSetLayout));
+		VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &mFrameDescriptorSetLayout));
+	}
 
-	VkDescriptorSetLayoutBinding dynamicUboLayoutBinding = {};
-	dynamicUboLayoutBinding.binding = 0;
-	dynamicUboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-	dynamicUboLayoutBinding.descriptorCount = 1;
-	dynamicUboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	dynamicUboLayoutBinding.pImmutableSamplers = nullptr;
+	// Draw
+	{
+		VkDescriptorSetLayoutBinding uniformLayoutBinding = {};
+		uniformLayoutBinding.binding = 0;
+		uniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		uniformLayoutBinding.descriptorCount = 1;
+		uniformLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		uniformLayoutBinding.pImmutableSamplers = nullptr;
 
-	VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
-	samplerLayoutBinding.binding = 1;
-	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerLayoutBinding.descriptorCount = 1;
-	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	samplerLayoutBinding.pImmutableSamplers = nullptr;
+		VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
+		samplerLayoutBinding.binding = 1;
+		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding.descriptorCount = 1;
+		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		samplerLayoutBinding.pImmutableSamplers = nullptr;
 
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { dynamicUboLayoutBinding, samplerLayoutBinding };
-	VkDescriptorSetLayoutCreateInfo dynamicLayoutInfo = {};
-	dynamicLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	dynamicLayoutInfo.bindingCount = static_cast<u32>(bindings.size());
-	dynamicLayoutInfo.pBindings = bindings.data();
+		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uniformLayoutBinding, samplerLayoutBinding };
+		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = static_cast<u32>(bindings.size());
+		layoutInfo.pBindings = bindings.data();
 
-	VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &dynamicLayoutInfo, nullptr, &mDrawDescriptorSetLayout));
+		VK_ASSERT(vkCreateDescriptorSetLayout(mDevice, &layoutInfo, nullptr, &mDrawDescriptorSetLayout));
+	}
 }
 
 void VulkanEngine::CreateGraphicsPipeline()
@@ -1232,10 +1239,10 @@ void VulkanEngine::CreateUniformBuffers()
 void VulkanEngine::CreateDescriptorPool()
 {
 	std::array<VkDescriptorPoolSize, 3> poolSizes = {};
-	// Static descriptors (global)
+	// Static descriptors (scene and frame)
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[0].descriptorCount = static_cast<u32>(mSwapChainImages.size() * 2);
-	// Dynamic descriptors (per frame and per draw)
+	// Dynamic descriptors (draw)
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	poolSizes[1].descriptorCount = static_cast<u32>(mSwapChainImages.size());
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1245,7 +1252,7 @@ void VulkanEngine::CreateDescriptorPool()
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<u32>(mSwapChainImages.size() * 3);
+	poolInfo.maxSets = static_cast<u32>(mSwapChainImages.size() * DS_COUNT);
 
 	VK_ASSERT(vkCreateDescriptorPool(mDevice, &poolInfo, nullptr, &mDescriptorPool));
 }
@@ -1280,13 +1287,14 @@ void VulkanEngine::UpdateDescriptorSets()
 {
 	for (size_t i = 0; i < mSwapChainImages.size(); ++i)
 	{
+		std::array<VkWriteDescriptorSet, 4> descriptorWrites = {};
+
 		// Scene descriptor
 		VkDescriptorBufferInfo sceneBufferInfo = {};
 		sceneBufferInfo.buffer = mUniformBuffers[i];
 		sceneBufferInfo.offset = offsetof(UniformBufferObject, scene);
 		sceneBufferInfo.range = sizeof(SceneUniformBuffer);
 
-		std::array<VkWriteDescriptorSet, 4> descriptorWrites = {};
 		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		descriptorWrites[0].dstSet = mSceneDescriptorSets[i];
 		descriptorWrites[0].dstBinding = 0;
@@ -1395,10 +1403,10 @@ void VulkanEngine::UpdateCommandBuffer(u32 frame)
 
 	u32 firstVertex = 0;
 	u32 firstIndex = 0;
-	u32 matIndex = 0;
+	u32 drawIndex = 0;
 	for (auto it = mComponentManager->GraphicComponentsBegin(); it != mComponentManager->GraphicComponentsEnd(); ++it)
 	{
-		u32 offset = sizeof(glm::mat4) * matIndex;
+		u32 offset = sizeof(glm::mat4) * drawIndex;
 		vkCmdBindDescriptorSets(mCommandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS,
 			mPipelineLayout, DS_DRAW, 1, &mDrawDescriptorSets[frame], 1, &offset);
 
@@ -1407,7 +1415,7 @@ void VulkanEngine::UpdateCommandBuffer(u32 frame)
 		vkCmdDrawIndexed(mCommandBuffers[frame], res.mIndexCount, 1, firstIndex, firstVertex, 0);
 		firstVertex += res.mVertexCount;
 		firstIndex += res.mIndexCount;
-		++matIndex;
+		++drawIndex;
 	}
 	vkCmdEndRenderPass(mCommandBuffers[frame]);
 	// END COMMANDS

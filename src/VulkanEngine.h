@@ -130,7 +130,7 @@ private:
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
 	void CreateSwapChainImageViews();
 	void CreateRenderPass();
-	void CreateDescriptorSetLayout();
+	void CreateDescriptorSetLayouts();
 	void CreateGraphicsPipeline();
 	VkShaderModule CreateShaderModule(const std::vector<char> &code);
 	void CreateFramebuffers();
