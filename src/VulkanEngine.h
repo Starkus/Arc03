@@ -141,13 +141,13 @@ private:
 	VkFormat FindSupportedFormat(const std::vector<VkFormat> &candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	VkFormat FindDepthFormat();
 	bool HasStencilComponent(VkFormat format);
-	void CreateTextureImage(u32 width, u32 height);
+	void CreateTextureImage(u32 width, u32 height, VkImage &image, VkDeviceMemory &imageMemory);
 	void CreateImage(u32 width, u32 height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
 			VkMemoryPropertyFlags properties, VkImage &image, VkDeviceMemory &imageMemory);
 	VkCommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
-	void CreateTextureImageView();
+	void CreateTextureImageView(VkImage &image, VkImageView &imageView);
 	void CreateTextureSampler();
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
@@ -187,19 +187,18 @@ private:
 	VkDevice mDevice;
 	VkQueue mGraphicsQueue;
 	VkQueue mPresentQueue;
+	VkRenderPass mRenderPass;
+	VkPipelineLayout mPipelineLayout;
+	VkPipeline mGraphicsPipeline;
+	VkCommandPool mCommandPool;
+	std::vector<VkCommandBuffer> mCommandBuffers;
+
+	// Swap chain
 	VkSwapchainKHR mSwapChain;
 	std::vector<VkImage> mSwapChainImages;
 	VkFormat mSwapChainImageFormat;
 	VkExtent2D mSwapChainExtent;
 	std::vector<VkFramebuffer> mSwapChainFramebuffers;
-	VkRenderPass mRenderPass;
-	VkDescriptorSetLayout mSceneDescriptorSetLayout;
-	VkDescriptorSetLayout mFrameDescriptorSetLayout;
-	VkDescriptorSetLayout mDrawDescriptorSetLayout;
-	VkPipelineLayout mPipelineLayout;
-	VkPipeline mGraphicsPipeline;
-	VkCommandPool mCommandPool;
-	std::vector<VkCommandBuffer> mCommandBuffers;
 	std::vector<VkImageView> mSwapChainImageViews;
 
 	// Geometry
@@ -209,17 +208,21 @@ private:
 	VkDeviceMemory mIndexBufferMemory;
 	size_t mIndexCount;
 
+	// Descriptor sets
 	std::vector<VkBuffer> mUniformBuffers;
 	std::vector<VkDeviceMemory> mUniformBuffersMemory;
 	VkDescriptorPool mDescriptorPool;
-
+	VkDescriptorSetLayout mSceneDescriptorSetLayout;
+	VkDescriptorSetLayout mFrameDescriptorSetLayout;
+	VkDescriptorSetLayout mDrawDescriptorSetLayout;
 	std::vector<VkDescriptorSet> mSceneDescriptorSets;
 	std::vector<VkDescriptorSet> mFrameDescriptorSets;
 	std::vector<VkDescriptorSet> mDrawDescriptorSets;
 
-	VkImage mTextureImage;
-	VkDeviceMemory mTextureImageMemory;
-	VkImageView mTextureImageView;
+	// Textures
+	std::vector<VkImage> mTextureImages;
+	std::vector<VkDeviceMemory> mTextureImageMemories;
+	std::vector<VkImageView> mTextureImageViews;
 	VkSampler mTextureSampler;
 
 	// Depth buffer

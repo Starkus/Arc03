@@ -52,7 +52,10 @@ public:
 		InitWindow();
 		InitVulkanEngine();
 
-		LoadTexture();
+		LoadTexture(TEXTURE_PATH);
+		LoadTexture("textures/texture.jpg");
+		LoadTexture("textures/gradient.png");
+		LoadTexture("textures/bricks.png");
 
 		mComponentManager.CreateGraphicComponent("models/monkey.bin");
 		mComponentManager.CreateGraphicComponent(MODEL_PATH);
@@ -79,42 +82,15 @@ private:
 		mVulkanEngine.InitVulkan(mWindow, mSurface);
 	}
 
-	void LoadTexture()
+	void LoadTexture(std::string textureFilename)
 	{
 		int texWidth, texHeight, texChannels;
-		stbi_uc *pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		stbi_uc *pixels = stbi_load(textureFilename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 		ARC_ASSERT(pixels);
 
 		mVulkanEngine.LoadTextureFromImage(pixels, static_cast<u32>(texWidth), static_cast<u32>(texHeight));
 
 		stbi_image_free(pixels);
-	}
-
-	void LoadModel()
-	{
-		std::vector<Vertex> vertices;
-		std::vector<u32> indices;
-
-		std::ifstream file;
-		file.open(MODEL_PATH.c_str(), std::ios::binary);
-
-		char header[9];
-		file.read(header, 8);
-		header[8] = 0;
-
-		u32 vertCount, indexCount;
-		file.read(reinterpret_cast<char *>(&vertCount), sizeof(u32));
-		file.read(reinterpret_cast<char *>(&indexCount), sizeof(u32));
-
-		vertices.resize(vertCount);
-		indices.resize(indexCount);
-
-		file.read(reinterpret_cast<char *>(vertices.data()), sizeof(Vertex) * vertCount);
-		file.read(reinterpret_cast<char *>(indices.data()), sizeof(u32) * indexCount);
-
-		file.close();
-
-		mVulkanEngine.LoadModel(vertices, indices);
 	}
 
 	void MainLoop()
