@@ -735,13 +735,18 @@ void VulkanEngine::CreateGraphicsPipeline()
 		mFrameDescriptorSetLayout,
 		mDrawDescriptorSetLayout
 	};
+	VkPushConstantRange pushConstantRange = {};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(u32);
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = DS_COUNT;
 	pipelineLayoutInfo.pSetLayouts = setLayouts;
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
 	VK_ASSERT(vkCreatePipelineLayout(mDevice, &pipelineLayoutInfo, nullptr, &mPipelineLayout));
 
 	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -1445,6 +1450,8 @@ void VulkanEngine::UpdateCommandBuffer(u32 frame)
 		u32 offset = sizeof(glm::mat4) * drawIndex;
 		vkCmdBindDescriptorSets(mCommandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS,
 			mPipelineLayout, DS_DRAW, 1, &mDrawDescriptorSets[frame], 1, &offset);
+
+		vkCmdPushConstants(mCommandBuffers[frame], mPipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(u32), &drawIndex);
 
 		const GraphicResource &res = it->mGraphicResource;
 
