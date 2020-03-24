@@ -57,8 +57,8 @@ public:
 		LoadTexture("textures/gradient.png");
 		LoadTexture("textures/bricks.png");
 
-		mComponentManager.CreateGraphicComponent("models/monkey.bin");
 		mComponentManager.CreateGraphicComponent(MODEL_PATH);
+		mComponentManager.CreateGraphicComponent("models/monkey.bin");
 
 		MainLoop();
 		CleanUp();
