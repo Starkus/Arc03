@@ -1,5 +1,12 @@
+#pragma message("Arc03.cpp")
 #include "Arc03.cpp"
-#include "VulkanEngine.cpp"
-#include "ResourceManager.cpp"
-#include "GpuAllocator.cpp"
-#include "ComponentManager.cpp"
+#pragma message("engine/ComponentManager.cpp")
+#include "engine/ComponentManager.cpp"
+#pragma message("engine/GraphicResource.cpp")
+#include "engine/GraphicResource.cpp"
+#pragma message("engine/ResourceManager.cpp")
+#include "engine/ResourceManager.cpp"
+#pragma message("memory/GpuAllocator.cpp")
+#include "memory/GpuAllocator.cpp"
+#pragma message("render/VulkanEngine.cpp")
+#include "render/VulkanEngine.cpp"

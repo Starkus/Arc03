@@ -6,8 +6,9 @@
 #include <unordered_map>
 #include <filesystem>
 
-#include "../src/ArcGlobals.h"
-#include "../src/Geometry.h"
+#include "ArcGlobals.h"
+#include "engine/Resource.h"
+#include "util/Geometry.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -60,24 +61,35 @@ void ExportModel(const std::string &filename, std::vector<Vertex> &vertices, std
 	std::ofstream outputFile;
 	outputFile.open(filename, std::ios::out | std::ios::binary | std::ios::trunc);
 
-	// Header
-	outputFile << "ARCR";
-	outputFile << "MESH";
-	
-	u32 vertCount = static_cast<u32>(vertices.size());
+	ResourceHeader header;
+
+	u32 vertexCount = static_cast<u32>(vertices.size());
 	u32 indexCount = static_cast<u32>(indices.size());
-	outputFile.write(reinterpret_cast<const char *>(&vertCount), sizeof(u32));
+	u64 vertexDataSize = sizeof(Vertex) * vertexCount;
+	u64 indexDataSize = sizeof(u32) * indexCount;
+
+	u64 fileSize = 2 * sizeof(u32) + vertexDataSize + indexDataSize;
+
+	// Header
+	memcpy(header.mSignature, "ARCR", 4);
+	header.mType = RESOURCETYPE_GRAPHIC;
+	header.mSize = fileSize;
+	outputFile.write(reinterpret_cast<const char *>(&header), sizeof(header));
+	
+	outputFile.write(reinterpret_cast<const char *>(&vertexCount), sizeof(u32));
 	outputFile.write(reinterpret_cast<const char *>(&indexCount), sizeof(u32));
 
-	outputFile.write(reinterpret_cast<const char *>(vertices.data()), sizeof(Vertex) * vertCount);
-	outputFile.write(reinterpret_cast<const char *>(indices.data()), sizeof(u32) * indexCount);
+	outputFile.write(reinterpret_cast<const char *>(vertices.data()), vertexDataSize);
+	outputFile.write(reinterpret_cast<const char *>(indices.data()), indexDataSize);
 
 	outputFile.close();
 }
 
 int main(int argc, char **argv)
 {
-	const std::string path = "../models";
+	ARC_UNUSED(argc);
+	ARC_UNUSED(argv);
+	const std::string path = "models";
 	for (const auto &entry : std::filesystem::directory_iterator(path))
 	{
 		std::vector<Vertex> vertices;

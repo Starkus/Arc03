@@ -4,8 +4,6 @@
 #include <GLFW/glfw3.h>
 
 #include <chrono>
-#include <iostream>
-#include <fstream>
 #include <vector>
 #include <set>
 #include <optional>
@@ -14,34 +12,40 @@
 #include <array>
 #include <unordered_map>
 
-#include "Memory.h"
-#include "ComponentManager.h"
+#include "engine/ComponentManager.h"
+#include "memory/Memory.h"
+#include "util/Geometry.h"
 
-void VulkanEngine::InitVulkan(GLFWwindow *window, VkSurfaceKHR surface)
+VulkanEngine *VulkanEngine::sInstance;
+
+void VulkanEngine::Initialize(GLFWwindow *window, VkSurfaceKHR surface)
 {
-	mWindow = window;
-	mSurface = surface;
+	static VulkanEngine instance;
+	sInstance = &instance;
 
-	CreateInstance();
-	CreateSurface();
-	PickPhysicalDevice();
-	CreateLogicalDevice();
-	CreateSwapChain();
-	CreateSwapChainImageViews();
-	CreateRenderPass();
-	CreateDescriptorSetLayouts();
-	CreateGraphicsPipeline();
-	CreateCommandPool();
-	CreateVertexBuffer();
-	CreateIndexBuffer();
-	CreateDepthResources();
-	CreateFramebuffers();
-	CreateCommandBuffers();
-	CreateTextureSampler();
-	CreateUniformBuffers();
-	CreateDescriptorPool();
-	CreateDescriptorSets();
-	CreateSyncObjects();
+	sInstance->mWindow = window;
+	sInstance->mSurface = surface;
+
+	sInstance->CreateInstance();
+	sInstance->CreateSurface();
+	sInstance->PickPhysicalDevice();
+	sInstance->CreateLogicalDevice();
+	sInstance->CreateSwapChain();
+	sInstance->CreateSwapChainImageViews();
+	sInstance->CreateRenderPass();
+	sInstance->CreateDescriptorSetLayouts();
+	sInstance->CreateGraphicsPipeline();
+	sInstance->CreateCommandPool();
+	sInstance->CreateVertexBuffer();
+	sInstance->CreateIndexBuffer();
+	sInstance->CreateDepthResources();
+	sInstance->CreateFramebuffers();
+	sInstance->CreateCommandBuffers();
+	sInstance->CreateTextureSampler();
+	sInstance->CreateUniformBuffers();
+	sInstance->CreateDescriptorPool();
+	sInstance->CreateDescriptorSets();
+	sInstance->CreateSyncObjects();
 }
 
 void VulkanEngine::DrawFrame()
@@ -114,14 +118,6 @@ void VulkanEngine::DrawFrame()
 	}
 
 	mCurrentFrame = (mCurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-}
-
-void VulkanEngine::LoadModel(const std::vector<Vertex> &vertices, const std::vector<u32> &indices)
-{
-	mIndexCount = indices.size();
-
-	FillVertexBuffer((void *)vertices.data(), 0, vertices.size() * sizeof(Vertex));
-	FillIndexBuffer((void *)indices.data(), 0, indices.size() * sizeof(u32));
 }
 
 void VulkanEngine::WaitForDevice()
@@ -203,12 +199,6 @@ void VulkanEngine::CreateInstance()
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 	std::vector<VkExtensionProperties> extensions(extensionCount);
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
-
-	std::cout << "Available extensions:" << std::endl;
-	for (const auto &extension : extensions)
-	{
-		std::cout << "\t" << extension.extensionName << std::endl;
-	}
 }
 
 void VulkanEngine::CreateSurface()
@@ -1445,7 +1435,8 @@ void VulkanEngine::UpdateCommandBuffer(u32 frame)
 	u32 firstVertex = 0;
 	u32 firstIndex = 0;
 	u32 drawIndex = 0;
-	for (auto it = mComponentManager->GraphicComponentsBegin(); it != mComponentManager->GraphicComponentsEnd(); ++it)
+	for (auto it = ComponentManager::Instance()->GraphicComponentsBegin();
+			it != ComponentManager::Instance()->GraphicComponentsEnd(); ++it)
 	{
 		u32 offset = sizeof(glm::mat4) * drawIndex;
 		vkCmdBindDescriptorSets(mCommandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1453,11 +1444,11 @@ void VulkanEngine::UpdateCommandBuffer(u32 frame)
 
 		vkCmdPushConstants(mCommandBuffers[frame], mPipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(u32), &drawIndex);
 
-		const GraphicResource &res = it->mGraphicResource;
+		const GraphicResource *res = it->mGraphicResource;
 
-		vkCmdDrawIndexed(mCommandBuffers[frame], res.mIndexCount, 1, firstIndex, firstVertex, 0);
-		firstVertex += res.mVertexCount;
-		firstIndex += res.mIndexCount;
+		vkCmdDrawIndexed(mCommandBuffers[frame], res->GetIndexCount(), 1, firstIndex, firstVertex, 0);
+		firstVertex += res->GetVertexCount();
+		firstIndex += res->GetIndexCount();
 		++drawIndex;
 	}
 	vkCmdEndRenderPass(mCommandBuffers[frame]);

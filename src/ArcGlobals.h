@@ -13,7 +13,7 @@
 #define ARC_DEBUG
 #endif
 
-#define UNUSED(x) (&reinterpret_cast<const int &>(x))
+#define ARC_UNUSED(x) (&reinterpret_cast<const int &>(x))
 
 #include <stdint.h>
 
@@ -44,3 +44,16 @@ typedef double f64;
 #endif
 
 #define VK_ASSERT(expr) do { if (expr != VK_SUCCESS) ARC_BREAK(); } while (false)
+
+#define ARC_DISABLE_COPY(CLASSNAME) \
+	CLASSNAME(const CLASSNAME &) = delete;\
+	CLASSNAME &operator=(const CLASSNAME &) = delete;\
+	CLASSNAME(CLASSNAME &&) = delete;\
+	CLASSNAME &operator=(CLASSNAME &&) = delete;
+
+#define ARC_DEFINE_SINGLETON(CLASSNAME)\
+	ARC_DISABLE_COPY(CLASSNAME)\
+	public:\
+		static CLASSNAME *Instance() { return sInstance; }\
+	private:\
+		static CLASSNAME *sInstance;

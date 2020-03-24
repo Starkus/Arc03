@@ -25,11 +25,11 @@
 #include <unordered_map>
 
 #include "ArcGlobals.h"
-#include "VulkanEngine.h"
-#include "Geometry.h"
-#include "Memory.h"
-#include "ResourceManager.h"
-#include "ComponentManager.h"
+#include "render/VulkanEngine.h"
+#include "util/Geometry.h"
+#include "memory/Memory.h"
+#include "engine/ResourceManager.h"
+#include "engine/ComponentManager.h"
 
 class Arc03
 {
@@ -40,25 +40,21 @@ class Arc03
 	const std::string TEXTURE_PATH = "textures/chalet.jpg";
 
 public:
-	Arc03() :
-		mVulkanEngine(&mComponentManager),
-		mResourceManager(&mVulkanEngine),
-		mComponentManager(&mResourceManager)
-	{
-	}
-
 	void Run()
 	{
 		InitWindow();
-		InitVulkanEngine();
+
+		VulkanEngine::Initialize(mWindow, mSurface);
+		ResourceManager::Initialize();
+		ComponentManager::Initialize();
 
 		LoadTexture(TEXTURE_PATH);
 		LoadTexture("textures/texture.jpg");
 		LoadTexture("textures/gradient.png");
 		LoadTexture("textures/bricks.png");
 
-		mComponentManager.CreateGraphicComponent(MODEL_PATH);
-		mComponentManager.CreateGraphicComponent("models/monkey.bin");
+		ComponentManager::Instance()->CreateGraphicComponent(MODEL_PATH);
+		ComponentManager::Instance()->CreateGraphicComponent("models/monkey.bin");
 
 		MainLoop();
 		CleanUp();
@@ -73,13 +69,7 @@ private:
 		//glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 		mWindow = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Vulkan window", nullptr, nullptr);
 
-		glfwSetWindowUserPointer(mWindow, &mVulkanEngine);
 		glfwSetFramebufferSizeCallback(mWindow, VulkanEngine::FramebufferResizeCallback);
-	}
-
-	void InitVulkanEngine()
-	{
-		mVulkanEngine.InitVulkan(mWindow, mSurface);
 	}
 
 	void LoadTexture(std::string textureFilename)
@@ -88,7 +78,7 @@ private:
 		stbi_uc *pixels = stbi_load(textureFilename.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 		ARC_ASSERT(pixels);
 
-		mVulkanEngine.LoadTextureFromImage(pixels, static_cast<u32>(texWidth), static_cast<u32>(texHeight));
+		VulkanEngine::Instance()->LoadTextureFromImage(pixels, static_cast<u32>(texWidth), static_cast<u32>(texHeight));
 
 		stbi_image_free(pixels);
 	}
@@ -98,23 +88,19 @@ private:
 		while (!glfwWindowShouldClose(mWindow))
 		{
 			glfwPollEvents();
-			mVulkanEngine.DrawFrame();
+			VulkanEngine::Instance()->DrawFrame();
 		}
 
-		mVulkanEngine.WaitForDevice();
+		VulkanEngine::Instance()->WaitForDevice();
 	}
 
 	void CleanUp()
 	{
-		mVulkanEngine.CleanUp();
+		VulkanEngine::Instance()->CleanUp();
 
 		glfwDestroyWindow(mWindow);
 		glfwTerminate();
 	}
-
-	VulkanEngine mVulkanEngine;
-	ResourceManager mResourceManager;
-	ComponentManager mComponentManager;
 
 	// Window
 	GLFWwindow *mWindow;

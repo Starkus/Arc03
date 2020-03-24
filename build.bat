@@ -34,7 +34,7 @@ IF %Tools% EQU 0 (
 	set CompilerFlags=-MDd -nologo -GR- -Oi -W4 -FC -Z7 -std:c++17
 	set LinkerFlags=-opt:ref -incremental:no -NODEFAULTLIB:MSVCRT
 	set Libraries=user32.lib Gdi32.lib winmm.lib shell32.lib
-	set IncludePaths=-I %LibPath%\glm -I %LibPath%\stb -I %LibPath%\tinyobjloader
+	set IncludePaths=-I %SrcPath% -I %LibPath%\glm -I %LibPath%\stb -I %LibPath%\tinyobjloader
 	set LibPaths=
 )
 
@@ -46,6 +46,7 @@ set ReleaseCompilerFlags=-O2
 IF NOT EXIST .\build mkdir .\build
 pushd .\build
 
+set start=%time%
 IF %Release% EQU 0 (
 	echo DEBUG build selected
 	cl %CompilerFlags% %DebugCompilerFlags% %SourceFiles% %Libraries% %IncludePaths% -link %LinkerFlags% %LibPaths%
@@ -55,9 +56,11 @@ IF %Release% EQU 0 (
 )
 IF %ERRORLEVEL% NEQ 0 echo Compilation [31mfailed![0m
 IF %ERRORLEVEL% EQU 0 echo Compilation [32msuccess[0m
+set end=%time%
 
 popd
 
+cmd /c timediff.bat Compile %start% %end%
 echo.
 
 echo Generating tags...

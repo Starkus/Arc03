@@ -15,18 +15,20 @@
 #include <set>
 #include <optional>
 #include <algorithm>
-#include <cstdint>
 #include <array>
 #include <unordered_map>
 
 #include "ArcGlobals.h"
-#include "Geometry.h"
 
-class ComponentManager;
+struct Vertex;
 
 class VulkanEngine
 {
-	enum eDescriptorSets
+	ARC_DEFINE_SINGLETON(VulkanEngine);
+
+	VulkanEngine() = default;
+
+	enum EDescriptorSets
 	{
 		DS_SCENE,
 		DS_FRAME,
@@ -91,12 +93,9 @@ class VulkanEngine
 #endif
 
 public:
-	VulkanEngine(ComponentManager *componentManager) : mComponentManager(componentManager) {}
-
-	void InitVulkan(GLFWwindow *window, VkSurfaceKHR surface);
+	static void Initialize(GLFWwindow *window, VkSurfaceKHR surface);
 	void DrawFrame();
 	void LoadTextureFromImage(void *pixels, u32 width, u32 height);
-	void LoadModel(const std::vector<Vertex> &vertices, const std::vector<u32> &indices);
 	void CleanUp();
 	void WaitForDevice();
 
@@ -107,11 +106,11 @@ public:
 
 	static void FramebufferResizeCallback(GLFWwindow *window, int width, int height)
 	{
-		UNUSED(width);
-		UNUSED(height);
+		ARC_UNUSED(window);
+		ARC_UNUSED(width);
+		ARC_UNUSED(height);
 
-		auto app = reinterpret_cast<VulkanEngine *>(glfwGetWindowUserPointer(window));
-		app->mFramebufferResized = true;
+		VulkanEngine::Instance()->mFramebufferResized = true;
 	}
 
 private:
@@ -179,8 +178,6 @@ private:
 		file.close();
 		return buffer;
 	}
-
-	ComponentManager *const mComponentManager;
 
 	VkInstance mInstance;
 	VkPhysicalDevice mPhysicalDevice;
