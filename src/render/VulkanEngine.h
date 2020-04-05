@@ -8,11 +8,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include <chrono>
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <set>
 #include <optional>
 #include <algorithm>
 #include <array>
@@ -103,6 +101,7 @@ public:
 	void FillVertexBuffer(void *dataSrc, size_t offset, size_t dataSize);
 	void FillIndexBuffer(void *dataSrc, size_t offset, size_t dataSize);
 	void UpdateCommandBuffer(u32 frame);
+	void UpdateDescriptorSets();
 
 	static void FramebufferResizeCallback(GLFWwindow *window, int width, int height)
 	{
@@ -157,7 +156,6 @@ private:
 	void CreateUniformBuffers();
 	void CreateDescriptorPool();
 	void CreateDescriptorSets();
-	void UpdateDescriptorSets();
 	void CreateCommandBuffers();
 	void CreateSyncObjects();
 	void UpdateUniformBuffer(u32 currentImage);

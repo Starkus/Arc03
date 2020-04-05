@@ -4,13 +4,6 @@
 #include <GLFW/glfw3.h>
 
 #include <chrono>
-#include <vector>
-#include <set>
-#include <optional>
-#include <algorithm>
-#include <cstdint>
-#include <array>
-#include <unordered_map>
 
 #include "engine/ComponentManager.h"
 #include "memory/Memory.h"
@@ -54,7 +47,8 @@ void VulkanEngine::DrawFrame()
 	vkWaitForFences(mDevice, 1, &mInFlightFences[mCurrentFrame], VK_TRUE, UINT64_MAX);
 
 	u32 imageIndex;
-	VkResult result = vkAcquireNextImageKHR(mDevice, mSwapChain, UINT64_MAX, mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(mDevice, mSwapChain, UINT64_MAX,
+			mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR)
 	{
 		RecreateSwapChain();
@@ -237,7 +231,8 @@ bool VulkanEngine::IsDeviceSuitable(VkPhysicalDevice device)
 		return false;
 
 	const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
-	const bool swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+	const bool swapChainAdequate = !swapChainSupport.formats.empty() &&
+			!swapChainSupport.presentModes.empty();
 	if (!swapChainAdequate)
 		return false;
 
@@ -261,7 +256,8 @@ bool VulkanEngine::CheckDeviceExtensionSupport(VkPhysicalDevice device)
 	u32 extensionCount;
 	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
 	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
+			availableExtensions.data());
 
 	std::set<std::string> requiredExtensions(mDeviceExtensions.begin(), mDeviceExtensions.end());
 	for (const auto &extension : availableExtensions)
@@ -371,7 +367,8 @@ VulkanEngine::SwapChainSupportDetails VulkanEngine::QuerySwapChainSupport(VkPhys
 	if (presentModeCount > 0)
 	{
 		details.presentModes.resize(presentModeCount);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(device, mSurface, &presentModeCount, details.presentModes.data());
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, mSurface, &presentModeCount,
+				details.presentModes.data());
 	}
 
 	return details;
@@ -386,8 +383,9 @@ void VulkanEngine::CreateSwapChain()
 	VkExtent2D extent = ChooseSwapExtent(swapChainSupport.capabilities);
 
 	u32 imageCount = swapChainSupport.capabilities.minImageCount + 1;
-	if (swapChainSupport.capabilities.minImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
-		imageCount = swapChainSupport.capabilities.maxImageCount;
+	const u32 maxImageCount = swapChainSupport.capabilities.maxImageCount;
+	if (maxImageCount > 0 && imageCount > maxImageCount)
+		imageCount = maxImageCount;
 
 	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -457,17 +455,22 @@ void VulkanEngine::RecreateSwapChain()
 	CreateDescriptorSets();
 }
 
-VkSurfaceFormatKHR VulkanEngine::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats)
+VkSurfaceFormatKHR VulkanEngine::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>
+		&availableFormats)
 {
 	for (const auto &availableFormat : availableFormats)
 	{
-		if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+		if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
+				availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+		{
 			return availableFormat;
+		}
 	}
 	return availableFormats[0];
 }
 
-VkPresentModeKHR VulkanEngine::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes)
+VkPresentModeKHR VulkanEngine::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>
+		&availablePresentModes)
 {
 	for (const auto &availablePresentMode : availablePresentModes)
 	{
@@ -493,8 +496,10 @@ VkExtent2D VulkanEngine::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabi
 			static_cast<u32>(height)
 		};
 
-		actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
-		actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
+		actualExtent.width = std::max(capabilities.minImageExtent.width,
+				std::min(capabilities.maxImageExtent.width, actualExtent.width));
+		actualExtent.height = std::max(capabilities.minImageExtent.height,
+				std::min(capabilities.maxImageExtent.height, actualExtent.height));
 
 		return actualExtent;
 	}
@@ -505,7 +510,8 @@ void VulkanEngine::CreateSwapChainImageViews()
 	mSwapChainImageViews.resize(mSwapChainImages.size());
 	for (size_t i = 0; i < mSwapChainImages.size(); ++i)
 	{
-		mSwapChainImageViews[i] = CreateImageView(mSwapChainImages[i], mSwapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+		mSwapChainImageViews[i] = CreateImageView(mSwapChainImages[i], mSwapChainImageFormat,
+				VK_IMAGE_ASPECT_COLOR_BIT);
 	}
 }
 
@@ -551,7 +557,8 @@ void VulkanEngine::CreateRenderPass()
 	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependency.srcAccessMask = 0;
 	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
 	std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
 	VkRenderPassCreateInfo renderPassInfo = {};
@@ -610,7 +617,10 @@ void VulkanEngine::CreateDescriptorSetLayouts()
 		imageLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 		imageLayoutBinding.pImmutableSamplers = nullptr;
 
-		std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uniformLayoutBinding, imageLayoutBinding, samplerLayoutBinding };
+		std::array<VkDescriptorSetLayoutBinding, 3> bindings =
+		{
+			uniformLayoutBinding, imageLayoutBinding, samplerLayoutBinding
+		};
 		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<u32>(bindings.size());
@@ -700,7 +710,11 @@ void VulkanEngine::CreateGraphicsPipeline()
 	multisampling.alphaToOneEnable = VK_FALSE;
 
 	VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
-	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlendAttachment.colorWriteMask =
+		VK_COLOR_COMPONENT_R_BIT |
+		VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT |
+		VK_COLOR_COMPONENT_A_BIT;
 	colorBlendAttachment.blendEnable = VK_FALSE;
 	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
 	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
@@ -767,7 +781,8 @@ void VulkanEngine::CreateGraphicsPipeline()
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 	pipelineInfo.basePipelineIndex = -1;
 
-	VK_ASSERT(vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &mGraphicsPipeline));
+	VK_ASSERT(vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
+			&mGraphicsPipeline));
 
 	vkDestroyShaderModule(mDevice, vertShaderModule, nullptr);
 	vkDestroyShaderModule(mDevice, fragShaderModule, nullptr);
@@ -821,7 +836,12 @@ void VulkanEngine::CreateCommandPool()
 	VK_ASSERT(vkCreateCommandPool(mDevice, &poolInfo, nullptr, &mCommandPool));
 }
 
-void VulkanEngine::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory)
+void VulkanEngine::CreateBuffer(
+		VkDeviceSize size,
+		VkBufferUsageFlags usage,
+		VkMemoryPropertyFlags properties,
+		VkBuffer &buffer,
+		VkDeviceMemory &bufferMemory)
 {
 	VkBufferCreateInfo bufferInfo = {};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -847,17 +867,18 @@ void VulkanEngine::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkM
 void VulkanEngine::CreateDepthResources()
 {
 	const VkFormat depthFormat = FindDepthFormat();
-	CreateImage(mSwapChainExtent.width, mSwapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mDepthImage,
-			mDepthImageMemory);
+	CreateImage(mSwapChainExtent.width, mSwapChainExtent.height, depthFormat,
+			VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mDepthImage, mDepthImageMemory);
 
 	mDepthImageView = CreateImageView(mDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-	TransitionImageLayout(mDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	TransitionImageLayout(mDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
-VkFormat VulkanEngine::FindSupportedFormat(const std::vector<VkFormat> &candidates, VkImageTiling tiling,
-		VkFormatFeatureFlags features)
+VkFormat VulkanEngine::FindSupportedFormat(const std::vector<VkFormat> &candidates, VkImageTiling
+		tiling, VkFormatFeatureFlags features)
 {
 	for (VkFormat format : candidates)
 	{
@@ -877,8 +898,14 @@ VkFormat VulkanEngine::FindSupportedFormat(const std::vector<VkFormat> &candidat
 
 VkFormat VulkanEngine::FindDepthFormat()
 {
-	const std::vector<VkFormat> candidates { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT };
-	return FindSupportedFormat(candidates, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	const std::vector<VkFormat> candidates
+	{
+		VK_FORMAT_D32_SFLOAT,
+		VK_FORMAT_D32_SFLOAT_S8_UINT,
+		VK_FORMAT_D24_UNORM_S8_UINT
+	};
+	return FindSupportedFormat(candidates, VK_IMAGE_TILING_OPTIMAL,
+			VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 }
 
 bool VulkanEngine::HasStencilComponent(VkFormat format)
@@ -911,7 +938,7 @@ void VulkanEngine::LoadTextureFromImage(void *pixels, u32 width, u32 height)
 	mTextureImageViews.push_back(imageView);
 	mTextureImageMemories.push_back(imageMemory);
 
-	UpdateDescriptorSets();
+	//UpdateDescriptorSets();
 
 	TransitionImageLayout(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);

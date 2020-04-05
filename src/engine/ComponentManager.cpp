@@ -10,7 +10,8 @@ void ComponentManager::Initialize()
 
 const GraphicComponent &ComponentManager::CreateGraphicComponent(std::string resourceFilename)
 {
-	GraphicResource *resource = static_cast<GraphicResource *>(ResourceManager::Instance()->LoadResource(resourceFilename));
-	mGraphicComponents.push_back(GraphicComponent { resource });
+	Resource *const resource = ResourceManager::Instance()->LoadResource(resourceFilename);
+	GraphicResource *graphicResource = static_cast<GraphicResource *>(resource);
+	mGraphicComponents.push_back(GraphicComponent { graphicResource });
 	return mGraphicComponents[mGraphicComponents.size() - 1];
 }

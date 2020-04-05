@@ -22,7 +22,13 @@ private:
 
 public:
 	static void Initialize();
-	const std::vector<GraphicComponent>::const_iterator GraphicComponentsBegin() const { return mGraphicComponents.begin(); }
-	const std::vector<GraphicComponent>::const_iterator GraphicComponentsEnd() const { return mGraphicComponents.end(); }
+	const std::vector<GraphicComponent>::const_iterator GraphicComponentsBegin() const
+	{
+		return mGraphicComponents.begin();
+	}
+	const std::vector<GraphicComponent>::const_iterator GraphicComponentsEnd() const
+	{
+		return mGraphicComponents.end();
+	}
 	const GraphicComponent &CreateGraphicComponent(std::string resourceFilename);
 };
